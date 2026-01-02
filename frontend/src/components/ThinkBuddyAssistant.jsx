@@ -30,33 +30,33 @@ const ThinkBuddyAssistant = ({ projects = [] }) => {
   // Function to format message text with bold headings
   const formatMessageText = (text) => {
     if (!text) return null;
-    
+
     // Remove all asterisks
     let formattedText = text.replace(/\*/g, '');
-    
+
     // Split by lines
     const lines = formattedText.split('\n');
-    
+
     return lines.map((line, index) => {
       let trimmedLine = line.trim();
-      
+
       // Skip lines that are just subheadings
       if (/^(summary|important points|key points|main topics|answer|solution|steps|recommendations):?\s*$/i.test(trimmedLine)) {
         return null;
       }
-      
+
       // Remove subheading prefixes from the beginning of lines
       trimmedLine = trimmedLine.replace(/^(summary|important points|key points|main topics|answer|solution|steps|recommendations):\s*/i, '');
-      
+
       // Check if line is a heading (starts with a number followed by period or dash, or contains colon at end)
-      const isHeading = /^\d+[\.\)]\s/.test(trimmedLine) || 
-                       /^[-•]\s/.test(trimmedLine) ||
-                       /^[A-Z][^:]{2,30}:\s*$/.test(trimmedLine);
-      
+      const isHeading = /^\d+[\.\)]\s/.test(trimmedLine) ||
+        /^[-•]\s/.test(trimmedLine) ||
+        /^[A-Z][^:]{2,30}:\s*$/.test(trimmedLine);
+
       if (!trimmedLine) {
         return <br key={index} />;
       }
-      
+
       if (isHeading) {
         return (
           <p key={index} className="font-bold mt-2 mb-1">
@@ -64,7 +64,7 @@ const ThinkBuddyAssistant = ({ projects = [] }) => {
           </p>
         );
       }
-      
+
       return (
         <p key={index} className="mb-1">
           {trimmedLine}
@@ -98,22 +98,22 @@ const ThinkBuddyAssistant = ({ projects = [] }) => {
       setLoading(true);
       setError(null);
       const token = await getIdToken();
-      
+
       const projectId = selectedProject?.teamId;
-      const url = projectId 
+      const url = projectId
         ? `${API_BASE_URL}/api/assistant/history?project_id=${projectId}`
         : `${API_BASE_URL}/api/assistant/history`;
-      
+
       const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      
+
       if (!response.ok) throw new Error('Failed to load chat history');
-      
+
       const data = await response.json();
-      
+
       if (data.history && data.history.length > 0) {
         const formattedMessages = data.history.map((msg, idx) => ({
           id: idx,
@@ -127,7 +127,7 @@ const ThinkBuddyAssistant = ({ projects = [] }) => {
         setMessages([{
           id: 1,
           role: "assistant",
-          content: projectId 
+          content: projectId
             ? `Hello! I'm ThinkBuddy. I can help you with questions about ${selectedProject?.teamName}. I have access to all team messages and can provide context-aware assistance!`
             : "Hello! I'm ThinkBuddy, your AI assistant. Select a project to get started with context-aware assistance!",
           timestamp: new Date().toISOString()
@@ -166,7 +166,7 @@ const ThinkBuddyAssistant = ({ projects = [] }) => {
     try {
       const token = await getIdToken();
       const projectId = selectedProject?.teamId;
-      
+
       const response = await fetch(`${API_BASE_URL}/api/assistant/chat`, {
         method: 'POST',
         headers: {
@@ -199,7 +199,7 @@ const ThinkBuddyAssistant = ({ projects = [] }) => {
     } catch (error) {
       console.error('Error sending message:', error);
       setError(error.message);
-      
+
       // Add error message
       const errorMessage = {
         id: Date.now() + 1,
@@ -228,7 +228,7 @@ const ThinkBuddyAssistant = ({ projects = [] }) => {
           const url = projectId
             ? `${API_BASE_URL}/api/assistant/clear-history?project_id=${projectId}`
             : `${API_BASE_URL}/api/assistant/clear-history`;
-          
+
           const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -275,7 +275,7 @@ const ThinkBuddyAssistant = ({ projects = [] }) => {
                 ThinkBuddy {selectedProject ? `- ${selectedProject.teamName}` : ""}
               </h2>
               <p className="text-xs text-gray-500">
-                {selectedProject 
+                {selectedProject
                   ? `Context-aware AI with access to ${selectedProject.teamName} messages`
                   : "Your AI-powered productivity companion"}
               </p>
@@ -337,87 +337,85 @@ const ThinkBuddyAssistant = ({ projects = [] }) => {
           </div>
         ) : (
           <>
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div className={`flex gap-3 max-w-3xl ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-              {/* Avatar */}
-              <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                message.role === 'user' 
-                  ? 'bg-gradient-to-br from-blue-500 to-blue-600' 
-                  : 'bg-gradient-to-br from-purple-500 to-indigo-600'
-              } shadow-md`}>
-                {message.role === 'user' ? (
-                  <span className="text-white text-sm font-medium">
-                    {user?.displayName?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'U'}
-                  </span>
-                ) : (
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                )}
-              </div>
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div className={`flex gap-3 max-w-3xl ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                  {/* Avatar */}
+                  <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${message.role === 'user'
+                    ? 'bg-gradient-to-br from-blue-500 to-blue-600'
+                    : 'bg-gradient-to-br from-purple-500 to-indigo-600'
+                    } shadow-md`}>
+                    {message.role === 'user' ? (
+                      <span className="text-white text-sm font-medium">
+                        {user?.displayName?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'U'}
+                      </span>
+                    ) : (
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      </svg>
+                    )}
+                  </div>
 
-              {/* Message Content */}
-              <div className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
-                <div className={`px-4 py-3 rounded-2xl shadow-sm ${
-                  message.role === 'user'
-                    ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
-                    : message.isError
-                    ? 'bg-red-50 text-red-900 border border-red-200'
-                    : 'bg-white text-gray-900 border border-gray-200'
-                }`}>
-                  {message.role === 'user' ? (
-                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
-                  ) : (
-                    <div className="text-sm leading-relaxed">
-                      {formatMessageText(message.content)}
-                    </div>
-                  )}
-                  {message.sources && message.sources.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-200">
-                      <p className="text-xs font-semibold text-gray-600 mb-2">📚 Sources from team messages:</p>
-                      <div className="space-y-1">
-                        {message.sources.slice(0, 3).map((source, idx) => (
-                          <div key={idx} className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
-                            <span className="font-medium">{source.sender}:</span> {source.content}
+                  {/* Message Content */}
+                  <div className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}>
+                    <div className={`px-4 py-3 rounded-2xl shadow-sm ${message.role === 'user'
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
+                      : message.isError
+                        ? 'bg-red-50 text-red-900 border border-red-200'
+                        : 'bg-white text-gray-900 border border-gray-200'
+                      }`}>
+                      {message.role === 'user' ? (
+                        <p className="text-sm whitespace-pre-wrap leading-relaxed">{message.content}</p>
+                      ) : (
+                        <div className="text-sm leading-relaxed">
+                          {formatMessageText(message.content)}
+                        </div>
+                      )}
+                      {message.sources && message.sources.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <p className="text-xs font-semibold text-gray-600 mb-2">📚 Sources from team messages:</p>
+                          <div className="space-y-1">
+                            {message.sources.slice(0, 3).map((source, idx) => (
+                              <div key={idx} className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                                <span className="font-medium">{source.sender}:</span> {source.content}
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <span className="text-xs text-gray-400 mt-1 px-1">
-                  {formatTime(message.timestamp)}
-                </span>
-              </div>
-            </div>
-          </div>
-        ))}
-
-        {/* Typing Indicator */}
-        {isTyping && (
-          <div className="flex justify-start">
-            <div className="flex gap-3 max-w-3xl">
-              <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-br from-purple-500 to-indigo-600 shadow-md">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-              </div>
-              <div className="bg-white border border-gray-200 px-4 py-3 rounded-2xl shadow-sm">
-                <div className="flex space-x-2">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    <span className="text-xs text-gray-400 mt-1 px-1">
+                      {formatTime(message.timestamp)}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
+            ))}
 
-        <div ref={messagesEndRef} />
+            {/* Typing Indicator */}
+            {isTyping && (
+              <div className="flex justify-start">
+                <div className="flex gap-3 max-w-3xl">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gradient-to-br from-purple-500 to-indigo-600 shadow-md">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                  </div>
+                  <div className="bg-white border border-gray-200 px-4 py-3 rounded-2xl shadow-sm">
+                    <div className="flex space-x-2">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
           </>
         )}
       </div>
@@ -458,7 +456,7 @@ const ThinkBuddyAssistant = ({ projects = [] }) => {
               />
             </div>
             <button
-              onClick={handleSendMessage}
+              onClick={() => handleSendMessage()}
               disabled={!inputMessage.trim() || isTyping}
               className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-400 text-white px-6 py-3 rounded-xl font-medium transition-all shadow-md hover:shadow-lg flex items-center gap-2 disabled:cursor-not-allowed"
             >

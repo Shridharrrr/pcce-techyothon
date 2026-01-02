@@ -6,7 +6,7 @@ from typing import List, Dict, Any
 # Load environment variables
 load_dotenv()
 
-GEMINI_API_KEY = "AIzaSyArgXw1-BZKu-dXdbXr_CfNrPiB4eoUEcw"
+GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY_SUMMARY")
 
 # Configure Gemini
 if GEMINI_API_KEY:
@@ -53,7 +53,7 @@ def generate_summary_from_messages(messages: List[Dict[str, Any]]) -> Dict[str, 
     
     try:
         # Initialize Gemini model
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash-lite')
         
         # Create a detailed prompt for Gemini
         prompt = f"""You are an expert at summarizing team conversations. 

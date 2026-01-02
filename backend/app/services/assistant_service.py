@@ -11,8 +11,7 @@ from app.config import db
 # Load environment variables
 load_dotenv()
 
-# Configure Gemini - use env variable or fallback to hardcoded key
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or "AIzaSyArgXw1-BZKu-dXdbXr_CfNrPiB4eoUEcw"
+GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY_SUMMARY")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
@@ -77,7 +76,8 @@ class AssistantService:
         use_rag: bool = True
     ) -> Dict[str, Any]:
         """
-        Generate AI response using Gemini with RAG (Retrieval Augmented Generation)
+        Generate AI response using Gemini with RAG (Retrieval Augmented Generation).
+        This is where the magic happens!
         
         Args:
             user_id: User identifier
@@ -92,14 +92,16 @@ class AssistantService:
             if not GEMINI_API_KEY:
                 raise Exception("GEMINI_API_KEY not configured")
             
-            # Initialize Gemini model
-            model = genai.GenerativeModel('gemini-2.0-flash')
+            # Initialize Gemini model - time to wake up the beast
+            model = genai.GenerativeModel('gemini-2.5-flash-lite')
             
             # Get conversation history for this specific project
+            # Gotta know what we were talking about
             history = self.get_conversation_history(user_id, project_context)
             
             # Retrieve relevant context from vector DB if RAG is enabled
             context_messages = []
+            knowledge_items = []
             retrieved_sources = []
             
             # Build context from RAG
@@ -112,22 +114,38 @@ class AssistantService:
                 # Search for relevant messages from the team (or all teams if no context)
                 # This searches ALL users' messages in the team, not just current user
                 print(f"🔍 Searching vector DB for: '{message}' in team: {project_context}")
+                
+                # Fetch chat history - "Who said what?"
+                # Importing explicitly to avoid circular import issues if module level is messy
+                from app.services.vector_db_service import search_relevant_context, search_knowledge_base
+                
                 context_messages = search_relevant_context(
                     query=message,
                     team_id=project_context,  # If None, searches across all teams
                     n_results=10  # Increased to get more context from all users
                 )
-                print(f"📊 Found {len(context_messages)} relevant messages")
+                
+                # Fetch Project Documentation and Code - "How does this actually work?"
+                knowledge_items = search_knowledge_base(
+                    query=message,
+                    team_id=project_context,
+                    n_results=3
+                )
+                
+                print(f"📊 Found {len(context_messages)} relevant messages and {len(knowledge_items)} knowledge items")
                 
                 # Format sources for response and build context
+                context_parts = []
+                
                 if context_messages:
-                    context_parts = ["\n**Relevant Team Messages from All Team Members:**"]
+                    context_parts.append("\n**Relevant Team Messages:**")
                     for i, msg in enumerate(context_messages, 1):
                         sender = msg.get("sender_name", "Unknown")
                         content = msg.get("content", "")
                         timestamp = msg.get("timestamp", "")
                 
                         retrieved_sources.append({
+                            "type": "chat",
                             "sender": sender,
                             "content": content[:100] + "..." if len(content) > 100 else content,
                             "timestamp": timestamp,
@@ -137,32 +155,45 @@ class AssistantService:
                         # Include full context for better AI understanding
                         context_parts.append(f"{i}. [{sender}] ({timestamp}): {content[:500]}")
                 
+                if knowledge_items:
+                    context_parts.append("\n**Relevant Project Knowledge & Code:**")
+                    for i, item in enumerate(knowledge_items, 1):
+                        content = item.get("content", "")
+                        meta = item.get("metadata", {})
+                        k_type = item.get("type", "info")
+                        
+                        retrieved_sources.append({
+                            "type": k_type,
+                            "sender": "System",
+                            "content": f"[{k_type}] {content[:100]}...",
+                            "timestamp": meta.get("timestamp", ""),
+                            "relevance": round(item.get("relevance", 0), 2)
+                        })
+                        
+                        context_parts.append(f"[{k_type.upper()}] {content[:1000]}")
+
+                if context_parts:
                     context_data = "\n".join(context_parts)
                 else:
-                    context_data = "No relevant team messages found."
+                    context_data = "No relevant context found."
                 
                 # Build the system prompt
-                system_prompt = """You are ThinkBuddy — an intelligent AI assistant designed to help with:
-                - Code explanation and debugging
-                - Project planning and best practices
-                - Technical questions and problem-solving
-                - Code review and suggestions
-                - General programming assistance
-                - Project summarization and analysis
+                # Giving the AI a chill but professional persona
+                system_prompt = """You are ThinkBuddy — an intelligent AI assistant.
                 
                 You are helpful, concise, and provide actionable insights.
                 
                 IMPORTANT:
-                When relevant team messages are provided below, they are from ALL team members — not just the current user.
-                You MUST analyze these messages collectively to give accurate, comprehensive, and context-aware responses
-                based on the entire project’s data. Avoid generic replies when specific context is available.
-                
-                For project summaries, analyze all team messages and provide clear insights about:
-                - What the team has discussed
-                - Decisions made
-                - Current project status
-                - Key contributions from each team member
-                - Overall progress and direction
+                You have access to:
+                1. Team Chat Logs: Messages from ALL team members. Use these to understand the discussion history.
+                2. Project Knowledge: Facts and descriptions about the project.
+                3. Code Snippets: Actual code from the project.
+
+                When answering:
+                - Synthesize information from ALL sources.
+                - If the user asks about code, look at the Code Snippets.
+                - If the user asks about project status, look at Chat Logs and Project Knowledge.
+                - Be specific, citing who said what if relevant.
                 """
                 
                 # Format recent conversation history (limit to last 5 messages)
@@ -173,7 +204,7 @@ class AssistantService:
                         role = "User" if msg["role"] == "user" else "Assistant"
                         history_text += f"{role}: {msg['content']}\n"
                 
-                # Build team context from messages
+                # Build team context from messages - just a glimpse of recent chatter
                 team_context = ""
                 if team_messages:
                     team_context = "\n".join([
@@ -185,10 +216,10 @@ class AssistantService:
                 full_prompt = f"""
                 {system_prompt}
                 
-                **Team Messages (All Members):**
-                {team_context if team_context else "No messages available."}
+                **Recent Team Activity (Last 20 messages):**
+                {team_context if team_context else "No recent messages."}
                 
-                **Relevant Context:**
+                **Retrieved Context (RAG):**
                 {context_data}
                 
                 {history_text}
@@ -198,14 +229,8 @@ class AssistantService:
                 **Your Response:**
                 """
             else:
-                # Simple prompt without RAG
-                system_prompt = """You are ThinkBuddy — an intelligent AI assistant designed to help with:
-                - Code explanation and debugging
-                - Project planning and best practices
-                - Technical questions and problem-solving
-                - Code review and suggestions
-                - General programming assistance
-                
+                # Simple prompt without RAG - flying blind!
+                system_prompt = """You are ThinkBuddy — an intelligent AI assistant.
                 You are helpful, concise, and provide actionable insights."""
                 
                 # Format recent conversation history
