@@ -24,7 +24,13 @@ def get_collection(collection_name: str) -> List[Dict[str, Any]]:
     if db is None:
         raise Exception("Firestore not configured")
     docs = db.collection(collection_name).stream()
-    return [doc.to_dict() for doc in docs]
+    result = []
+    for doc in docs:
+        data = doc.to_dict()
+        if "id" not in data:
+            data["id"] = doc.id
+        result.append(data)
+    return result
 
 def update_document(collection_name: str, doc_id: str, data: dict):
     """Update a document in Firestore"""

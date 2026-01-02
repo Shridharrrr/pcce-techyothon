@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import ThemedLoader from "./ThemedLoader";
+import InviteNotifications from "./InviteNotifications";
+import AddMemberModal from "./AddMemberModal";
+import { useToast } from "./ToastContainer";
 import {
   Instrument_Serif,
   Domine,
@@ -40,10 +43,14 @@ const ProjectSidebar = ({
   onProjectsLoaded,
 }) => {
   const { getIdToken, user } = useAuth();
+  const { showSuccess, showError, showConfirm } = useToast();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [offlineMode, setOfflineMode] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [selectedTeamId, setSelectedTeamId] = useState(null);
 
   useEffect(() => {
     fetchProjects();
@@ -157,6 +164,41 @@ const ProjectSidebar = ({
     onProjectSelect(project);
   };
 
+  const handleDeleteProject = async (e, projectId) => {
+    e.stopPropagation();
+    showConfirm("Are you sure you want to delete this project?", async () => {
+      try {
+        const token = await getIdToken();
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.2:8000"}/teams/${projectId}`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!response.ok) throw new Error("Failed to delete project");
+
+        showSuccess("Project deleted successfully");
+        if (selectedProject?.teamId === projectId) {
+          onProjectSelect(null);
+        }
+        fetchProjects();
+      } catch (err) {
+        console.error("Error deleting project:", err);
+        showError("Failed to delete project");
+      }
+    });
+  };
+
+  const openAddMemberModal = (e, teamId) => {
+    e.stopPropagation();
+    setSelectedTeamId(teamId);
+    setShowAddMemberModal(true);
+  };
+
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString();
@@ -176,12 +218,24 @@ const ProjectSidebar = ({
       <div className="p-4 border border-gray-200 bg-white">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-gray-900 font-sans">Projects</h2>
-          <button
-            onClick={onCreateProject}
-            className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 text-xs rounded-sm font-medium transition-all flex items-center gap-1.5"
-          >
-            Add +
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowNotifications(true)}
+              className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors relative"
+              title="Notifications"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              {/* Optional: Add a red dot if there are pending invites */}
+            </button>
+            <button
+              onClick={onCreateProject}
+              className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 text-xs rounded-sm font-medium transition-all flex items-center gap-1.5"
+            >
+              Add +
+            </button>
+          </div>
         </div>
 
         {/* ThinkBuddy Button */}
@@ -191,10 +245,10 @@ const ProjectSidebar = ({
         >
           {/* Animated background gradient */}
           <div className="absolute inset-0 bg-gradient-to-r from-purple-700 via-blue-700 to-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-          
+
           {/* Shine effect */}
           <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
-          
+
           <svg
             className="w-5 h-5 relative z-10 group-hover:rotate-12 group-hover:scale-110 transition-transform duration-300"
             fill="none"
@@ -288,17 +342,40 @@ const ProjectSidebar = ({
               <div
                 key={project.teamId}
                 onClick={() => handleProjectClick(project)}
-                className={`p-2.5  cursor-pointer transition-all mb-2 ${
-                  selectedProject?.teamId === project.teamId
-                    ? "bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-300 shadow-sm"
-                    : "hover:bg-white hover:shadow-sm border border-gray-100"
-                }`}
+                className={`p-2.5  cursor-pointer transition-all mb-2 group relative ${selectedProject?.teamId === project.teamId
+                  ? "bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-300 shadow-sm"
+                  : "hover:bg-white hover:shadow-sm border border-gray-100"
+                  }`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900 truncate text-sm">
-                      {project.teamName}
-                    </h3>
+                    <div className="flex justify-between items-start">
+                      <h3 className="font-semibold text-gray-900 truncate text-sm flex-1">
+                        {project.teamName}
+                      </h3>
+                      {project.admin_id === user?.uid && (
+                        <div className="flex items-center gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={(e) => openAddMemberModal(e, project.teamId)}
+                            className="p-1 text-gray-400 hover:text-blue-600 rounded hover:bg-blue-50"
+                            title="Add Member"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={(e) => handleDeleteProject(e, project.teamId)}
+                            className="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-red-50"
+                            title="Delete Project"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2 mt-1.5">
                       <div className="flex -space-x-1">
                         {project.members?.slice(0, 2).map((member, index) => (
@@ -344,6 +421,17 @@ const ProjectSidebar = ({
           {projects.length} project{projects.length !== 1 ? "s" : ""}
         </div>
       </div>
+      <InviteNotifications
+        isOpen={showNotifications}
+        onClose={() => setShowNotifications(false)}
+        onInviteHandled={fetchProjects}
+      />
+
+      <AddMemberModal
+        isOpen={showAddMemberModal}
+        onClose={() => setShowAddMemberModal(false)}
+        teamId={selectedTeamId}
+      />
     </div>
   );
 };

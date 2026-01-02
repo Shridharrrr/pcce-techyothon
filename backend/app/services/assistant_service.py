@@ -6,6 +6,7 @@ import uuid
 from dotenv import load_dotenv
 from app.services.vector_db_service import search_relevant_context, add_messages_batch
 from app.services.firestore_service import get_team_messages
+from firebase_admin import firestore
 from app.config import db
 
 # Load environment variables
@@ -372,7 +373,7 @@ Description: {description}
             if doc.exists:
                 # Append to existing messages
                 history_ref.update({
-                    "messages": db.field_value.ArrayUnion([message_data]),
+                    "messages": firestore.ArrayUnion([message_data]),
                     "updated_at": datetime.now().isoformat(),
                     "last_message_at": datetime.now().isoformat()
                 })

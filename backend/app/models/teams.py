@@ -30,7 +30,9 @@ class Team(TeamBase):
 
 class TeamInvite(BaseModel):
     team_id: str
+    team_name: str
     inviter_email: str
+    inviter_name: str
     invitee_email: EmailStr
     role: str = "member"
     status: str = "pending"  # pending, accepted, declined

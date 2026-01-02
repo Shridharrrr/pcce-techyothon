@@ -61,33 +61,7 @@ async def create_team(
         joined_at=datetime.utcnow()
     )]
 
-    # Add other members if provided
-    for member_email in team_data.member_emails:
-        if member_email != admin_email:
-            member_user = get_user_by_email(member_email)
-            if member_user:
-                members.append(TeamMember(
-                    user_id=member_user["userId"],
-                    email=member_email,
-                    name=member_user.get("name", member_email.split("@")[0]),
-                    role="member",
-                    joined_at=datetime.utcnow()
-                ))
-            else:
-                # Create invitation for non-existing users
-                invite_id = str(uuid.uuid4())
-                invite = TeamInvite(
-                    team_id=team_id,
-                    inviter_email=admin_email,
-                    invitee_email=member_email,
-                    role="member",
-                    status="pending",
-                    created_at=datetime.utcnow(),
-                    expires_at=datetime.utcnow() + timedelta(days=7)
-                )
-                create_document("team_invites", invite_id, invite.dict())
-
-    # Create the team
+    # Create the team with only admin member initially
     team = Team(
         teamId=team_id,
         admin_id=admin_id,
@@ -98,6 +72,26 @@ async def create_team(
         created_at=datetime.utcnow()
     )
     create_document("teams", team_id, team.dict())
+
+    # Send invites to other members
+    for member_email in team_data.member_emails:
+        if member_email != admin_email:
+            # Check if user already exists
+            member_user = get_user_by_email(member_email)
+            
+            invite_id = str(uuid.uuid4())
+            invite = TeamInvite(
+                team_id=team_id,
+                team_name=team_data.teamName,
+                inviter_email=admin_email,
+                inviter_name=admin_user.get("name", admin_email.split("@")[0]),
+                invitee_email=member_email,
+                role="member",
+                status="pending",
+                created_at=datetime.utcnow(),
+                expires_at=datetime.utcnow() + timedelta(days=7)
+            )
+            create_document("team_invites", invite_id, invite.dict())
 
     # Update admin user's team list
     admin_teams = admin_user.get("myTeams", [])
@@ -254,7 +248,9 @@ async def invite_user_to_team(
     invite_id = str(uuid.uuid4())
     invite = TeamInvite(
         team_id=team_id,
+        team_name=team.get("teamName", "Unknown Team"),
         inviter_email=current_user.get("email"),
+        inviter_name=current_user.get("name", current_user.get("email").split("@")[0]),
         invitee_email=invitee_email,
         role="member",
         status="pending",
@@ -264,6 +260,85 @@ async def invite_user_to_team(
     
     create_document("team_invites", invite_id, invite.dict())
     return {"message": "Invitation sent successfully", "invite_id": invite_id}
+
+@router.get("/invites/my", response_model=List[dict])
+async def get_my_invites(current_user: dict = Depends(get_current_user)):
+    """Get all pending invites for the current user"""
+    user_email = current_user.get("email")
+    all_invites = get_collection("team_invites") or []
+    
+    my_invites = [
+        invite for invite in all_invites
+        if invite.get("invitee_email") == user_email and invite.get("status") == "pending"
+    ]
+    return my_invites
+
+@router.post("/invites/{invite_id}/accept")
+async def accept_invite(invite_id: str, current_user: dict = Depends(get_current_user)):
+    """Accept a team invitation"""
+    invite = get_document("team_invites", invite_id)
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    
+    if invite.get("invitee_email") != current_user.get("email"):
+        raise HTTPException(status_code=403, detail="This invitation is not for you")
+    
+    if invite.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="Invitation is no longer valid")
+    
+    team_id = invite.get("team_id")
+    team = get_document("teams", team_id)
+    if not team:
+        # If team no longer exists, just expire the invite
+        update_document("team_invites", invite_id, {"status": "expired"})
+        raise HTTPException(status_code=404, detail="Team no longer exists")
+    
+    # Check if already a member
+    user_id = current_user.get("uid")
+    if any(member.get("user_id") == user_id for member in team.get("members", [])):
+        # Already member, just update invite status
+        update_document("team_invites", invite_id, {"status": "accepted"})
+        return {"message": "You are already a member of this team"}
+    
+    # Add user to team
+    # Ensure user has a profile in our DB first
+    ensure_user_in_firestore(current_user)
+    user_doc = get_user_by_email(current_user.get("email"))
+
+    member_data = {
+        "user_id": user_doc["userId"],
+        "email": user_doc["email"],
+        "name": user_doc.get("name", user_doc["email"].split("@")[0]),
+        "role": invite.get("role", "member"),
+        "joined_at": datetime.utcnow()
+    }
+    
+    success = add_team_member(team_id, member_data)
+    if success:
+        # Update user's myTeams
+        member_teams = user_doc.get("myTeams", [])
+        if team_id not in member_teams:
+            member_teams.append(team_id)
+            update_document("users", user_doc["userId"], {"myTeams": member_teams})
+        
+        # Update invite status
+        update_document("team_invites", invite_id, {"status": "accepted"})
+        return {"message": "Joined team successfully", "team_id": team_id}
+    
+    raise HTTPException(status_code=500, detail="Failed to join team")
+
+@router.post("/invites/{invite_id}/reject")
+async def reject_invite(invite_id: str, current_user: dict = Depends(get_current_user)):
+    """Reject a team invitation"""
+    invite = get_document("team_invites", invite_id)
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invitation not found")
+    
+    if invite.get("invitee_email") != current_user.get("email"):
+        raise HTTPException(status_code=403, detail="This invitation is not for you")
+    
+    update_document("team_invites", invite_id, {"status": "declined"})
+    return {"message": "Invitation declined"}
 
 # -----------------------
 # Delete Team

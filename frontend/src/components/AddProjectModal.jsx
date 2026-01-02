@@ -63,19 +63,19 @@ const AddProjectModal = ({ isOpen, onClose, onProjectCreated }) => {
       }
 
       const newProject = await response.json();
-      
+
       // Reset form
       setFormData({
         teamName: "",
         description: "",
         memberEmails: ""
       });
-      
+
       onProjectCreated(newProject);
       onClose();
     } catch (err) {
       console.error('Error creating project:', err);
-      
+
       // If backend is not available, create a mock project for demo
       if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
         const mockProject = {
@@ -93,19 +93,19 @@ const AddProjectModal = ({ isOpen, onClose, onProjectCreated }) => {
           created_at: new Date().toISOString(),
           last_message_at: null
         };
-        
+
         // Reset form
         setFormData({
           teamName: "",
           description: "",
           memberEmails: ""
         });
-        
+
         onProjectCreated(mockProject);
         onClose();
         return;
       }
-      
+
       setError(err.message || 'Failed to create project');
     } finally {
       setLoading(false);
@@ -189,7 +189,7 @@ const AddProjectModal = ({ isOpen, onClose, onProjectCreated }) => {
           {/* Member Emails */}
           <div>
             <label htmlFor="memberEmails" className="block text-sm font-medium text-gray-700 mb-2">
-              Add Members
+              Invite Members
             </label>
             <input
               type="text"
@@ -202,7 +202,7 @@ const AddProjectModal = ({ isOpen, onClose, onProjectCreated }) => {
               disabled={loading}
             />
             <p className="text-xs text-gray-500 mt-1">
-              Separate multiple email addresses with commas
+              Separate multiple email addresses with commas. They will receive an invitation to join.
             </p>
           </div>
 
